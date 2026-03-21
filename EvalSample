@@ -1,0 +1,77 @@
+[
+  {
+    "question": "How is deep learning used in radiology for image analysis?",
+    "expected_answer": "deep learning convolutional neural networks medical imaging detection classification",
+    "notes": "Core radiology AI question — should retrieve CNN/imaging chunks"
+  },
+  {
+    "question": "What are the challenges of deploying AI in clinical settings?",
+    "expected_answer": "clinical deployment challenges interpretability trust regulatory FDA approval",
+    "notes": "Tests retrieval of implementation/deployment papers"
+  },
+  {
+    "question": "How does AI improve early cancer detection?",
+    "expected_answer": "cancer detection screening machine learning classification accuracy sensitivity specificity",
+    "notes": "Oncology-focused retrieval test"
+  },
+  {
+    "question": "What role does natural language processing play in analysing electronic health records?",
+    "expected_answer": "NLP electronic health records EHR clinical notes text mining information extraction",
+    "notes": "Tests NLP-in-healthcare retrieval"
+  },
+  {
+    "question": "How are convolutional neural networks applied to pathology slide analysis?",
+    "expected_answer": "CNN convolutional neural network pathology histology whole slide image classification",
+    "notes": "Specific technical question — tests precision of chunk retrieval"
+  },
+  {
+    "question": "What is federated learning and why is it important for medical data privacy?",
+    "expected_answer": "federated learning privacy preserving distributed training patient data hospitals",
+    "notes": "Tests retrieval of privacy/federated learning content"
+  },
+  {
+    "question": "How accurate are AI systems compared to human doctors in diagnosing skin lesions?",
+    "expected_answer": "dermatology skin lesion AI accuracy dermatologist comparison performance",
+    "notes": "Human vs AI comparison — common benchmark question"
+  },
+  {
+    "question": "What datasets are commonly used to train AI models for chest X-ray diagnosis?",
+    "expected_answer": "ChestX-ray14 CheXpert NIH dataset chest radiograph pneumonia classification",
+    "notes": "Tests dataset-specific retrieval — good benchmark"
+  },
+  {
+    "question": "How does transfer learning reduce the need for large medical datasets?",
+    "expected_answer": "transfer learning pretrained ImageNet fine-tuning limited labelled data medical",
+    "notes": "Transfer learning in medical imaging"
+  },
+  {
+    "question": "What are the ethical concerns surrounding AI decision-making in healthcare?",
+    "expected_answer": "ethics bias fairness AI healthcare decision accountability transparency",
+    "notes": "Ethics retrieval — tests broader healthcare AI literature"
+  },
+  {
+    "question": "How is AI used in drug discovery and development?",
+    "expected_answer": "drug discovery molecule generation protein structure clinical trials AI acceleration",
+    "notes": "Pharmaceutical AI retrieval"
+  },
+  {
+    "question": "What metrics are used to evaluate AI diagnostic models in medicine?",
+    "expected_answer": "AUC ROC sensitivity specificity precision recall F1 accuracy diagnostic",
+    "notes": "Metrics knowledge — should appear in many papers"
+  },
+  {
+    "question": "How do recurrent neural networks help in predicting patient outcomes?",
+    "expected_answer": "RNN LSTM time series patient outcome prediction ICU mortality readmission",
+    "notes": "Sequential/temporal modelling in clinical AI"
+  },
+  {
+    "question": "What is the role of AI in personalised medicine and genomics?",
+    "expected_answer": "personalised medicine genomics precision medicine biomarker AI prediction treatment",
+    "notes": "Genomics/precision medicine AI"
+  },
+  {
+    "question": "How is explainability achieved in AI models used for clinical diagnosis?",
+    "expected_answer": "explainability interpretability SHAP LIME Grad-CAM attention clinical decision",
+    "notes": "XAI in healthcare — increasingly important research area"
+  }
+]
