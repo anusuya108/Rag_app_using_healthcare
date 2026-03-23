@@ -8,19 +8,15 @@ from sentence_transformers import CrossEncoder
 
 
 # ─────────────────────────────────────────────
-# RERANKER — loaded once at import
+# RERANKER
 # ─────────────────────────────────────────────
 reranker = CrossEncoder("BAAI/bge-reranker-large")
 
 
 # ─────────────────────────────────────────────
-# GROQ CLIENT — lazy load (safe for Streamlit)
+# GROQ CLIENT — lazy load
 # ─────────────────────────────────────────────
 def get_groq_client():
-    """
-    Load Groq client at call time — not at import time.
-    Checks Streamlit secrets first, then env var.
-    """
     api_key = None
 
     # 1. Streamlit Cloud secrets
@@ -35,11 +31,7 @@ def get_groq_client():
         api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
-        raise EnvironmentError(
-            "GROQ_API_KEY not found.\n"
-            "Local: add to .env file.\n"
-            "Streamlit Cloud: App Settings → Secrets → add GROQ_API_KEY."
-        )
+        raise EnvironmentError("GROQ_API_KEY not found.")
 
     from groq import Groq
     return Groq(api_key=api_key)
@@ -47,14 +39,15 @@ def get_groq_client():
 
 # ─────────────────────────────────────────────
 # RETRIEVAL + RERANKING
+# FIX: fetch from MORE diverse sources
 # ─────────────────────────────────────────────
 def retrieve_chunks(vector_store: Chroma, question: str) -> List[Document]:
     retriever = vector_store.as_retriever(
         search_type="mmr",
         search_kwargs={
-            "k": 15,
-            "fetch_k": 30,
-            "lambda_mult": 0.7,
+            "k": 20,           # fetch more candidates
+            "fetch_k": 50,     # wider search pool
+            "lambda_mult": 0.5, # FIX: lower = more diversity
         },
     )
 
@@ -66,9 +59,21 @@ def retrieve_chunks(vector_store: Chroma, question: str) -> List[Document]:
     # Rerank
     pairs  = [(question, doc.page_content) for doc in docs]
     scores = reranker.predict(pairs)
-
     ranked = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
-    return [doc for doc, _ in ranked[:5]]
+
+    # FIX: enforce source diversity — max 2 chunks per PDF
+    seen_sources = {}
+    diverse_docs = []
+    for doc, score in ranked:
+        source = doc.metadata.get("source", "unknown")
+        count  = seen_sources.get(source, 0)
+        if count < 2:
+            diverse_docs.append(doc)
+            seen_sources[source] = count + 1
+        if len(diverse_docs) >= 6:
+            break
+
+    return diverse_docs
 
 
 # ─────────────────────────────────────────────
@@ -76,13 +81,15 @@ def retrieve_chunks(vector_store: Chroma, question: str) -> List[Document]:
 # ─────────────────────────────────────────────
 def clean_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"\(.*?\d{4}.*?\)", "", text)
+    text = re.sub(r"\[[\d,\s]+\]", "", text)   # remove [1], [12, 14]
+    text = re.sub(r"\(.*?\d{4}.*?\)", "", text) # remove (Author 2020)
     text = re.sub(r"et al\.", "", text)
     return text.strip()
 
 
 # ─────────────────────────────────────────────
 # CONTEXT BUILDER
+# FIX: use all 6 chunks for better coverage
 # ─────────────────────────────────────────────
 def build_context(docs: List[Document]) -> str:
     seen = set()
@@ -99,13 +106,16 @@ def build_context(docs: List[Document]) -> str:
             continue
         seen.add(key)
 
-        chunks.append(text)
+        source = doc.metadata.get("source", "unknown")
+        chunks.append(f"[Source: {source}]\n{text}")
 
-    return "\n\n".join(chunks[:4])
+    # FIX: use all 6 chunks, not just 4
+    return "\n\n".join(chunks[:6])
 
 
 # ─────────────────────────────────────────────
 # LLM ANSWER
+# FIX: better prompt for higher scores
 # ─────────────────────────────────────────────
 def generate_answer(question: str, docs: List[Document]) -> str:
     if not docs:
@@ -113,23 +123,23 @@ def generate_answer(question: str, docs: List[Document]) -> str:
 
     context = build_context(docs)
 
-    prompt = f"""You are a healthcare AI assistant.
+    prompt = f"""You are an expert healthcare AI assistant.
 
-Answer the question using ONLY the context below.
+Answer the following question using ONLY the information provided in the context below.
 
-Rules:
-- Start with a clear definition (1-2 lines)
-- Then give 3-4 bullet points explaining it
-- Do NOT include author names, citations, or paper titles
-- Do NOT copy text directly
-- Be concise and precise
-- If the answer is not in the context, say "I don't know"
+STRICT RULES:
+- Write a clear 2-3 sentence definition first
+- Then write exactly 4 detailed bullet points that directly address the question
+- Each bullet point must be at least 2 sentences long with specific details
+- Use your own words — do NOT copy text from context
+- Do NOT mention author names, citations, paper titles, or reference numbers
+- Do NOT say "according to the context" or "based on the context"
+- If the answer is genuinely not in the context, say exactly: "I don't know"
 
 Context:
 {context}
 
-Question:
-{question}
+Question: {question}
 
 Answer:"""
 
@@ -138,36 +148,39 @@ Answer:"""
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
+        temperature=0.1,
+        max_tokens=800,   # FIX: allow longer answers → better coverage score
     )
 
     return response.choices[0].message.content.strip()
 
 
 # ─────────────────────────────────────────────
-# FALLBACK (no LLM)
+# FALLBACK — show error clearly instead of
+# silently returning chunk text
 # ─────────────────────────────────────────────
-def fallback_answer(question: str, docs: List[Document]) -> str:
+def fallback_answer(question: str, docs: List[Document], error: str = "") -> str:
     if not docs:
-        return "No relevant content found."
+        return "No relevant content found in the knowledge base."
+
+    error_note = f"\n\n⚠️ LLM Error: {error}" if error else ""
 
     summary = []
-
     for doc in docs:
         sentences = re.split(r'(?<=[.!?])\s+', doc.page_content)
         for s in sentences:
             s = clean_text(s)
             if len(s) > 80:
                 summary.append(s)
-            if len(summary) >= 4:
+            if len(summary) >= 5:
                 break
 
-    answer = summary[0] if summary else "No relevant content found."
-    answer += "\n\nKey Points:\n"
-    for s in summary[1:4]:
-        answer += f"- {s}\n"
+    result = summary[0] if summary else "No relevant content found."
+    result += "\n\nKey Points:\n"
+    for s in summary[1:5]:
+        result += f"- {s}\n"
 
-    return answer
+    return result + error_note
 
 
 # ─────────────────────────────────────────────
@@ -187,7 +200,8 @@ def answer_question(
     try:
         answer = generate_answer(question, docs)
     except Exception as e:
-        print(f"LLM failed → fallback: {e}")
-        answer = fallback_answer(question, docs)
+        error_msg = str(e)
+        print(f"LLM failed → fallback: {error_msg}")
+        answer = fallback_answer(question, docs, error=error_msg)
 
     return answer, docs
